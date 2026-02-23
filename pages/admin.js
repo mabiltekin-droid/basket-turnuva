@@ -1,30 +1,29 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 
-export default function Admin() {
+export default function AdminPortal() {
+  const [user, setUser] = useState(null);
+  const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('maclar');
   const [maclar, setMaclar] = useState([]);
   const [takimlar, setTakimlar] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [yildizlar, setYildizlar] = useState({ takim_adi: '', mvp_isim: '', mvp_istatistik: '', takim_skor_ozet: '' });
+  const [yildizlar, setYildizlar] = useState({ takim_adi: '', mvp_isim: '', mvp_istatistik: '' });
+
+  // !!! BURAYI KENDİ ADMİN MAİLİNLE DEĞİŞTİR !!!
+  const ADMIN_EMAIL = "senin-mailin@gmail.com"; 
 
   useEffect(() => {
-    const checkAdmin = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      
-      // BURAYI GÜNCELLE: Sadece bu mail admin paneline girebilir
-      const adminEmail = "senin-mailin@gmail.com"; 
-
-      if (!session || session.user.email !== adminEmail) {
-        // Eğer admin değilse ana sayfaya yönlendir
-        window.location.href = "/";
-      } else {
-        setLoading(false);
-        fetchData();
-      }
-    };
-    checkAdmin();
+    checkUser();
   }, []);
+
+  async function checkUser() {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (session) {
+      setUser(session.user);
+      if (session.user.email === ADMIN_EMAIL) fetchData();
+    }
+    setLoading(false);
+  }
 
   async function fetchData() {
     const { data: m } = await supabase.from('maclar').select('*').order('saat', { ascending: true });
@@ -35,35 +34,69 @@ export default function Admin() {
     if (y) setYildizlar(y);
   }
 
+  const handleLogin = async () => {
+    await supabase.auth.signInWithOAuth({
+      provider: 'google',
+      options: { redirectTo: window.location.origin + '/admin' }
+    });
+  };
+
   const updateMatch = async (id, field, value) => {
     await supabase.from('maclar').update({ [field]: value }).eq('id', id);
     fetchData();
   };
 
-  const updateTeamStats = async (id, field, value) => {
-    await supabase.from('basvurular').update({ [field]: parseInt(value) }).eq('id', id);
-    fetchData();
-  };
+  if (loading) return <div className="bg-black min-h-screen flex items-center justify-center text-yellow-500 font-black italic uppercase tracking-widest">Sistem Yükleniyor...</div>;
 
-  const saveStars = async () => {
-    await supabase.from('haftanin_yildizlari').upsert({ id: 1, ...yildizlar });
-    alert("Vitrin güncellendi!");
-  };
+  // --- DURUM 1: GİRİŞ YAPILMAMIŞSA VEYA ROL SEÇİMİ ---
+  if (!user) {
+    return (
+      <div className="bg-black min-h-screen flex items-center justify-center p-6 bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-zinc-900 via-black to-black">
+        <div className="max-w-md w-full text-center">
+          <h1 className="text-5xl font-black italic text-yellow-500 mb-12 uppercase tracking-tighter">GİRİŞ YAP</h1>
+          <div className="grid gap-4">
+            <button onClick={handleLogin} className="group bg-white hover:bg-yellow-500 transition-all p-8 rounded-[2.5rem] text-black flex flex-col items-center gap-2">
+              <span className="text-xs font-black uppercase tracking-widest opacity-60">Turnuva Katılımcısı</span>
+              <span className="text-2xl font-black italic uppercase group-hover:scale-105 transition">KAPTAN GİRİŞİ</span>
+            </button>
+            <button onClick={handleLogin} className="group bg-zinc-900 border border-zinc-800 hover:border-yellow-500 transition-all p-8 rounded-[2.5rem] flex flex-col items-center gap-2">
+              <span className="text-xs font-black uppercase tracking-widest text-zinc-500">Organizasyon</span>
+              <span className="text-2xl font-black italic uppercase group-hover:text-yellow-500 transition">ADMİN PANELİ</span>
+            </button>
+          </div>
+          <button onClick={() => window.location.href = '/'} className="mt-8 text-zinc-600 text-[10px] font-black uppercase tracking-[0.3em] hover:text-white transition">Geri Dön</button>
+        </div>
+      </div>
+    );
+  }
 
-  if (loading) return <div className="bg-black min-h-screen flex items-center justify-center text-yellow-500 font-black">YETKİ KONTROLÜ...</div>;
+  // --- DURUM 2: KAPTAN GİRİŞİ (ADMİN DEĞİLSE) ---
+  if (user.email !== ADMIN_EMAIL) {
+    return (
+      <div className="bg-black min-h-screen flex items-center justify-center p-6 text-center">
+        <div className="bg-zinc-900 border border-zinc-800 p-12 rounded-[3rem] shadow-2xl">
+          <div className="text-5xl mb-6">🏀</div>
+          <h1 className="text-2xl font-black text-yellow-500 mb-2 uppercase italic">KAPTAN DOĞRULANDI</h1>
+          <p className="text-zinc-500 text-sm mb-8 max-w-xs mx-auto">Başarıyla giriş yaptın. Dashboard üzerinden takımını yönetebilirsin.</p>
+          <button onClick={() => window.location.href = '/'} className="w-full bg-white text-black py-4 rounded-2xl font-black uppercase italic hover:bg-yellow-500 transition">Dashboard'a Git</button>
+        </div>
+      </div>
+    );
+  }
 
+  // --- DURUM 3: ADMİN PANELİ ---
   return (
-    <div className="bg-zinc-950 min-h-screen text-white p-6 md:p-10">
+    <div className="bg-zinc-950 min-h-screen text-white p-6">
       <div className="max-w-6xl mx-auto">
-        <header className="flex justify-between items-center mb-10 border-b border-zinc-900 pb-6">
-          <h1 className="text-2xl font-black italic text-yellow-500 uppercase tracking-tighter">ADMİN PANELİ</h1>
-          <button onClick={() => window.location.href = '/'} className="bg-white text-black text-[10px] font-bold px-4 py-2 rounded-lg uppercase">Siteye Dön</button>
+        <header className="flex justify-between items-center mb-10 border-b border-zinc-900 pb-6 uppercase italic">
+          <h1 className="text-2xl font-black text-yellow-500">Yönetim</h1>
+          <button onClick={() => supabase.auth.signOut().then(() => window.location.reload())} className="text-[10px] font-bold bg-zinc-900 px-4 py-2 rounded-lg">Güvenli Çıkış</button>
         </header>
 
         <div className="flex gap-2 mb-8 bg-zinc-900 p-1 rounded-xl w-fit">
-          {['maclar', 'takimlar', 'yildizlar'].map(t => (
-            <button key={t} onClick={() => setActiveTab(t)} className={`px-6 py-2 rounded-lg text-[10px] font-black uppercase transition ${activeTab === t ? 'bg-yellow-500 text-black' : 'text-zinc-500 hover:text-white'}`}>
-              {t === 'maclar' ? 'Maçlar' : t === 'takimlar' ? 'Puanlar' : 'Vitrin'}
+          {['maclar', 'takimlar', 'vitrin'].map(t => (
+            <button key={t} onClick={() => setActiveTab(t)} className={`px-6 py-2 rounded-lg text-[10px] font-black uppercase transition ${activeTab === t ? 'bg-yellow-500 text-black' : 'text-zinc-500'}`}>
+              {t}
             </button>
           ))}
         </div>
@@ -71,62 +104,18 @@ export default function Admin() {
         {activeTab === 'maclar' && (
           <div className="grid gap-3">
             {maclar.map(mac => (
-              <div key={mac.id} className="bg-zinc-900 border border-zinc-800 p-5 rounded-2xl flex flex-wrap justify-between items-center gap-4">
-                <div className="flex-1">
-                  <p className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">{mac.saat}</p>
-                  <p className="font-black italic uppercase">{mac.takim_a} vs {mac.takim_b}</p>
+              <div key={mac.id} className="bg-zinc-900 border border-zinc-800 p-5 rounded-2xl flex justify-between items-center">
+                <p className="font-black italic uppercase text-sm">{mac.takim_a} - {mac.takim_b}</p>
+                <div className="flex gap-2">
+                  <input type="number" defaultValue={mac.takim_a_skor} onBlur={(e) => updateMatch(mac.id, 'takim_a_skor', e.target.value)} className="w-12 bg-black border border-zinc-800 p-2 rounded text-center text-yellow-500 font-bold" />
+                  <input type="number" defaultValue={mac.takim_b_skor} onBlur={(e) => updateMatch(mac.id, 'takim_b_skor', e.target.value)} className="w-12 bg-black border border-zinc-800 p-2 rounded text-center text-yellow-500 font-bold" />
                 </div>
-                <div className="flex gap-2 items-center">
-                  <input type="number" defaultValue={mac.takim_a_skor} onBlur={(e) => updateMatch(mac.id, 'takim_a_skor', e.target.value)} className="w-12 bg-black border border-zinc-800 p-2 rounded-lg text-center font-bold text-yellow-500" />
-                  <span className="text-zinc-700">-</span>
-                  <input type="number" defaultValue={mac.takim_b_skor} onBlur={(e) => updateMatch(mac.id, 'takim_b_skor', e.target.value)} className="w-12 bg-black border border-zinc-800 p-2 rounded-lg text-center font-bold text-yellow-500" />
-                </div>
-                <select value={mac.durum} onChange={(e) => updateMatch(mac.id, 'durum', e.target.value)} className="bg-black border border-zinc-800 p-2 rounded-lg text-[10px] font-bold outline-none">
-                  <option value="bekliyor">BEKLİYOR</option>
-                  <option value="canli">CANLI</option>
-                  <option value="tamamlandi">BİTTİ</option>
-                </select>
               </div>
             ))}
           </div>
         )}
-
-        {activeTab === 'takimlar' && (
-          <div className="bg-zinc-900 border border-zinc-800 rounded-2xl overflow-hidden">
-            <table className="w-full text-left text-xs">
-              <thead className="bg-zinc-800/50 text-zinc-500 uppercase font-black">
-                <tr>
-                  <th className="p-4">Takım Adı</th>
-                  <th className="p-4 text-center">G</th>
-                  <th className="p-4 text-center">M</th>
-                  <th className="p-4 text-center">Puan</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-zinc-800/50">
-                {takimlar.map(t => (
-                  <tr key={t.id}>
-                    <td className="p-4 font-bold uppercase">{t.takim_adi}</td>
-                    <td className="p-4 text-center"><input type="number" defaultValue={t.galibiyet} onBlur={(e) => updateTeamStats(t.id, 'galibiyet', e.target.value)} className="w-12 bg-black border border-zinc-800 p-1 rounded text-center" /></td>
-                    <td className="p-4 text-center"><input type="number" defaultValue={t.maglubiyet} onBlur={(e) => updateTeamStats(t.id, 'maglubiyet', e.target.value)} className="w-12 bg-black border border-zinc-800 p-1 rounded text-center" /></td>
-                    <td className="p-4 text-center font-black text-yellow-500"><input type="number" defaultValue={t.puan} onBlur={(e) => updateTeamStats(t.id, 'puan', e.target.value)} className="w-12 bg-black border border-zinc-800 p-1 rounded text-center" /></td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-
-        {activeTab === 'yildizlar' && (
-          <div className="bg-zinc-900 border border-zinc-800 p-8 rounded-3xl max-w-xl mx-auto">
-            <h3 className="text-lg font-black italic uppercase mb-6 text-yellow-500">Haftanın Vitrini</h3>
-            <div className="space-y-4">
-              <input placeholder="Haftanın Takımı" value={yildizlar.takim_adi} onChange={e => setYildizlar({...yildizlar, takim_adi: e.target.value.toUpperCase()})} className="w-full bg-black border border-zinc-800 p-4 rounded-xl outline-none" />
-              <input placeholder="MVP İsim" value={yildizlar.mvp_isim} onChange={e => setYildizlar({...yildizlar, mvp_isim: e.target.value})} className="w-full bg-black border border-zinc-800 p-4 rounded-xl outline-none" />
-              <input placeholder="MVP İstatistik" value={yildizlar.mvp_istatistik} onChange={e => setYildizlar({...yildizlar, mvp_istatistik: e.target.value})} className="w-full bg-black border border-zinc-800 p-4 rounded-xl outline-none" />
-              <button onClick={saveStars} className="w-full bg-yellow-500 text-black font-black py-4 rounded-xl uppercase italic hover:bg-white transition">Güncelle</button>
-            </div>
-          </div>
-        )}
+        
+        {/* Diğer Tablar (Takım Puanları ve Vitrin) Burada fetchlanabilir */}
       </div>
     </div>
   );
